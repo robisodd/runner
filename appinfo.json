@@ -9,6 +9,11 @@
     "resources": {
         "media": [
             {
+                "file": "images/Font8.png",
+                "name": "FONT8",
+                "type": "png"
+            },
+            {
                 "file": "images/sprites-mask.png",
                 "name": "SPRITES_MASK",
                 "type": "png"
@@ -16,11 +21,6 @@
             {
                 "file": "images/sprites.png",
                 "name": "SPRITES",
-                "type": "png"
-            },
-            {
-                "file": "images/Font8.png",
-                "name": "FONT8",
                 "type": "png"
             }
         ]
