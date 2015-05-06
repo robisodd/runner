@@ -1,4 +1,5 @@
 #include "pebble.h"
+#include "graphics.h"
 Window *main_window;
 Layer *root_layer, *message_layer;
 AppTimer *looptimer;
@@ -8,89 +9,14 @@ AppTimer *looptimer;
 #define screen8   ((uint8_t*)framebuffer->addr)
 #define screen16 ((uint16_t*)framebuffer->addr)
 #define screen32 ((uint32_t*)framebuffer->addr)
-static void timer_callback(void *data);  // need to define this here so up button can pause
+static void main_loop(void *data);  // need to define this here so up button can pause
 
 // end .h stuff
 
-GBitmap *font8_bmp, *sprites_bmp, *sprites_mask_bmp;
-uint8_t *font8;
-uint16_t *sprites, *sprites_mask;
-uint8_t map[16*16];
-
-// ------------------------------------------------------------------------------------------------------------------------------------------------ //
-void load_images() {
-  font8_bmp        = gbitmap_create_with_resource(RESOURCE_ID_FONT8);
-  sprites_bmp      = gbitmap_create_with_resource(RESOURCE_ID_SPRITES);
-  sprites_mask_bmp = gbitmap_create_with_resource(RESOURCE_ID_SPRITES_MASK);
-  //font8 = gbitmap_get_data(font8_bmp);
-  font8        = font8_bmp->addr;
-  sprites      = sprites_bmp->addr;
-  sprites_mask = sprites_mask_bmp->addr;
-}
-
-void destroy_images() {
-  gbitmap_destroy(font8_bmp);
-  gbitmap_destroy(sprites_bmp);
-  gbitmap_destroy(sprites_mask_bmp);
-}
-
-// draws without mask
-void draw_block16(uint16_t *screen, int16_t start_x, int16_t start_y, uint8_t spr) {
-  uint32_t left  = (start_x <   0) ?                     0 - start_x : 0;
-  uint32_t right = (start_x > 128) ? (start_x < 144) ? 144 - start_x : 0 : 16;
-  
-    for(uint32_t y=0; y<16; y++) {
-      uint16_t y_addr = (start_y + y) * 10;
-      uint16_t row = sprites[(spr&1) + ((spr&254)*16) + (y*2)];
-      
-      for(uint32_t x=left; x<right; x++) {
-        screen[y_addr + ((start_x+x) >> 4)] &= ~(1 << ((start_x+x)&15)); // Black Background (comment out for clear)
-        screen[y_addr + ((start_x+x) >> 4)] |=  (((row>>x)&1) << ((start_x+x)&15)); // White Pixel
-      }
-    }
-}
-
-// draws with mask
-void draw_sprite16(uint16_t *screen, int16_t start_x, int16_t start_y, uint8_t spr) {
-  uint16_t left   = (start_x <      0) ? (start_x >  -16) ?   0 - start_x : 16 :  0;
-  uint16_t right  = (start_x > 144-16) ? (start_x <  144) ? 144 - start_x :  0 : 16;
-  uint16_t top    = (start_y <      0) ? (start_y >  -16) ?   0 - start_y : 16 :  0;
-  uint16_t bottom = (start_y > 168-16) ? (start_y <  168) ? 168 - start_y :  0 : 16;
-//   static char text[40];  //Buffer to hold text
-//   snprintf(text, sizeof(text), "%d %d - %d %d %d %d", start_x, start_y, left, right, top, bottom);
-//   snprintf(text, sizeof(text), "%d - %d %d", start_y, top, bottom);
-//   APP_LOG(APP_LOG_LEVEL_INFO, text);
-
-  for(uint16_t y=top; y<bottom; y++) {
-    uint16_t y_addr = (start_y + y) * 10;
-    uint16_t row = sprites[(spr&1) + ((spr&254)*16) + (y*2)];
-    uint16_t mask_row = sprites_mask[(spr&1) + ((spr&254)*16) + (y*2)];
-      
-    for(uint16_t x=left; x<right; x++) {
-      screen[y_addr + ((start_x+x) >> 4)] &= ~( ((mask_row>>x)&1) << ((start_x+x)&15)); // Black Background (comment out for clear)
-      screen[y_addr + ((start_x+x) >> 4)] |=  ( (((mask_row>>x)&1) & ((row>>x)&1)) << ((start_x+x)&15)); // White Pixel
-    }
-  }
-}
-
-
-void draw_font8_fast(uint8_t *screen, int16_t start_x, int16_t start_y, uint8_t chr) {
-  start_y = (start_y*20) + start_x;
-  uint8_t *row = font8 + (chr&3) + ((chr&252)*8);
-  for(uint32_t y=0; y<8; y++, start_y+=20, row+=4)
-    screen[start_y] = *row;
-}
-
-void draw_font8_text(uint8_t *screen, int16_t x, int16_t y, char *str) {
-  uint8_t strpos=0;
-  while(str[strpos]>0) {
-    draw_font8_fast(screen, x, y, str[strpos]);
-    x++; strpos++;
-  }
-}
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
+uint8_t map[16*16];
 uint8_t  offset;
 uint8_t  runner_frame;
 uint8_t  runner_x;
@@ -102,12 +28,35 @@ uint8_t  lives;
 //int16_t yvel=0;
 uint8_t yvel;
 bool paused=false;
-
 // bool jumping=false;
 uint8_t jumpmode; // 0=on ground, button let go, ready to jump, 1=jumping button held, 2=falling button let go
 uint8_t runmode; // 0=running, 1=stopped (TODO: Mix with JUMPMODE and ALIVE to make PlayerState)
 bool    alive;
 uint8_t coinanimation;
+
+int addInt(int n, int m) {
+    return n+m;
+}
+//First thing, lets define a pointer to a function which receives 2 ints and returns and int:
+
+//int (*functionPtr)(int,int);
+//Now we can safely point to our function:
+
+//functionPtr = &addInt;
+
+
+//void *pause_function(void *data);
+
+void pause_game() {
+  if(!paused) {
+    
+  }
+}
+
+void focus_handler(bool in_focus) {
+  if (!in_focus)
+    paused = true;
+}
 
 // ------------------------------------------------------------------------ //
 //  Button Functions
@@ -129,22 +78,22 @@ static bool dn_button_previous  = false; // Whether Pebble's  Down  button is he
 //   //window_single_repeating_click_subscribe(BUTTON_ID_DOWN, 100, down_single_click_handler);
 // }
   
-void up_push_in_handler(ClickRecognizerRef recognizer, void *context) {
+static void up_push_in_handler(ClickRecognizerRef recognizer, void *context) {
   up_button_depressed = true;
   paused=!paused;
   if(paused)
     app_timer_cancel(looptimer);
   else
-    timer_callback(NULL);
+    main_loop(NULL);
 }
-void up_release_handler(ClickRecognizerRef recognizer, void *context) {up_button_depressed = false;}
-void dn_push_in_handler(ClickRecognizerRef recognizer, void *context) {dn_button_depressed = true;}
-void dn_release_handler(ClickRecognizerRef recognizer, void *context) {dn_button_depressed = false;}
-void sl_push_in_handler(ClickRecognizerRef recognizer, void *context) {sl_button_depressed = true;
-                                                                      if(paused) timer_callback(NULL);  // frame advance
-                                                                      }
-void sl_release_handler(ClickRecognizerRef recognizer, void *context) {sl_button_depressed = false;}
-void click_config_provider(void *context) {
+static void up_release_handler(ClickRecognizerRef recognizer, void *context) {up_button_depressed = false;}
+static void dn_push_in_handler(ClickRecognizerRef recognizer, void *context) {dn_button_depressed = true;}
+static void dn_release_handler(ClickRecognizerRef recognizer, void *context) {dn_button_depressed = false;}
+static void sl_push_in_handler(ClickRecognizerRef recognizer, void *context) {sl_button_depressed = true;
+                                                                              if(paused) main_loop(NULL);  // frame advance
+                                                                             }
+static void sl_release_handler(ClickRecognizerRef recognizer, void *context) {sl_button_depressed = false;}
+static void click_config_provider(void *context) {
   window_raw_click_subscribe(BUTTON_ID_UP, up_push_in_handler, up_release_handler, context);
   window_raw_click_subscribe(BUTTON_ID_DOWN, dn_push_in_handler, dn_release_handler, context);
   window_raw_click_subscribe(BUTTON_ID_SELECT, sl_push_in_handler, sl_release_handler, context);
@@ -154,13 +103,12 @@ void click_config_provider(void *context) {
 //  Timer Functions
 // ------------------------------------------------------------------------ //
 static void remove_message(void *data) {
-  layer_set_hidden(message_layer, true);
-  timer_callback(NULL);
+  layer_set_hidden(message_layer, true);  // remove "LIVES x #"
+  main_loop(NULL);                   // start the action!
 }
 
 
-
-static void init_game(void *data) {
+static void init_round(void *data) {
   offset=0;
   runner_frame=0;
   runner_x = 30+48;
@@ -172,6 +120,7 @@ static void init_game(void *data) {
   alive=true;
   coinanimation=0;
 
+  // design level?
   //rand() % 3 == 0 ? 1 : 0;
   for(uint16_t i=0; i<256; i++) map[i] = 0; // Clear map
   for(uint16_t i=0; i<16; i++) map[i] = 1;  // Bottom path
@@ -189,6 +138,9 @@ static void init_game(void *data) {
 
 
 static void death_timer_callback(void *data) {
+  if(paused) {
+    looptimer=app_timer_register(UPDATE_MS, death_timer_callback, NULL); // Schedule a callback to continue animation
+  } else {
   runner_y += yvel;  // move y position
   yvel-=2;           // Death Gravity
   if((int8_t)yvel<-10) yvel=246; // terminal velocity (int -10 = uint 246)
@@ -196,14 +148,14 @@ static void death_timer_callback(void *data) {
   layer_mark_dirty(root_layer);      // Schedule redraw of screen
   if(runner_y<240)                                                       // if not below bottom of screen
     looptimer=app_timer_register(UPDATE_MS, death_timer_callback, NULL); // Schedule a callback to continue animation
-  else {
-    lives--;
-    app_timer_register(1000, init_game, NULL); // Start again
+  else    
+    looptimer=app_timer_register(1000, init_round, NULL);  // Wait a full second, then start over
   }
 }
 
+
 uint8_t Q1, Q2;
-static void timer_callback(void *data) {
+static void main_loop(void *data) {
   uint8_t occupied1, occupied2;
   // outline:
   //  Move Player
@@ -211,10 +163,8 @@ static void timer_callback(void *data) {
   
   
   
-  // Move player
+  // Move player horizontally
   offset += 5;                  // move tiles left 5 pixels
-  
-  if((int8_t)yvel<-10) yvel=246; // terminal velocity (int -10 = uint 246)
 
   // See if runner hit something to the right
   runmode=0; // mode=running (unless hit a block sideways)
@@ -234,14 +184,14 @@ static void timer_callback(void *data) {
     runner_x+=1; if(runner_x>50+48) runner_x=50+48; // catching back up
   }
 
+  // Move Player Vertically
   yvel-=6;  // Gravity
-  runner_y += yvel;  // fall
+  if((int8_t)yvel<-10) yvel=246; // terminal velocity (int -10 = uint 246)
+  runner_y += yvel;  // fall (or rise)
   
   if(yvel>127) { // if falling downward, check if feet hit (>127 means <0)
-    //if((runner_y+yvel)&255<15 || runner_y<15) {  // if touching bottom, dead
-    if(((runner_y)&255)<=15) {  // if touching bottom, dead
+    if(runner_y<=15) {  // if touching bottom, dead
       alive=false;
-      //yvel=0;
     } else {
       occupied1=map[(((runner_x+2+offset)>>4)&15) + ((runner_y-16)&240)]; // bottom left area of player
       occupied2=map[(((runner_x+13+offset)>>4)&15) + ((runner_y-16)&240)]; // bottom right area of player
@@ -255,11 +205,11 @@ static void timer_callback(void *data) {
         //TODO: wide foot print so if 2 or 3px either way is land, then stand
       }
     }
-  } else {  // else moving up or 0
+  } else if(yvel>0) {  // else moving up (could remove yvel>0 and make this just an else if it works with 0 velocity)
     // add [if hitting head] here
     //occupied=(((runner_x+8+offset)>>4)&15) + ((runner_y+yvel)&240);
-    occupied1=map[(((runner_x+ 2+offset)>>4)&15) + ((runner_y)&240)];
-    occupied2=map[(((runner_x+13+offset)>>4)&15) + ((runner_y)&240)];
+    occupied1=map[(((runner_x+ 2+offset)>>4)&15) + (runner_y&240)];
+    occupied2=map[(((runner_x+13+offset)>>4)&15) + (runner_y&240)];
     if(occupied1==1 || occupied1==3 || occupied1==5 || occupied1==7 || occupied2==1 || occupied2==3 || occupied2==5 || occupied2==7) {
       runner_y=((runner_y)&240)-1; //+16+15: 16 to put on top of block and 15 for top of head
       yvel=0; // block stops jump
@@ -272,7 +222,7 @@ static void timer_callback(void *data) {
     map[occupied1]=0;
     coins++;
     score+=100;
-    vibes_cancel(); vibes_enqueue_custom_pattern((VibePattern){.durations = (uint32_t []){40}, .num_segments = 1});
+    vibes_cancel(); vibes_enqueue_custom_pattern((VibePattern){.durations = (uint32_t []){20}, .num_segments = 1});  // pulse with each coin
   }
   if(coins>99) {
     coins-=100;
@@ -294,7 +244,7 @@ static void timer_callback(void *data) {
       Q1=occupied1; Q2=occupied2;
   if(dn_button_depressed) {  // if jump button is being pushed
     if(!dn_button_previous) { // if it was JUST pushed (try to jump)
-//occupied=
+//occupied=map[] <-- put the two lines above Q1 Q2 here
       if(occupied1==1 || occupied1==3 || occupied1==5 || occupied1==7 || occupied2==1 || occupied2==3 || occupied2==5 || occupied2==7) {
         jumpmode=1; // playermode = jumping
         yvel=11+4;    // y velocity of jumping (note: adds 2 below)
@@ -325,9 +275,10 @@ static void timer_callback(void *data) {
   layer_mark_dirty(root_layer);                    // Schedule redraw of screen
   if(alive) {
     if(!paused)
-      looptimer=app_timer_register(UPDATE_MS, timer_callback, NULL); // Schedule a callback
+      looptimer=app_timer_register(UPDATE_MS, main_loop, NULL); // Schedule a callback
   } else {
     yvel=15;
+    lives--;
     looptimer=app_timer_register(500, death_timer_callback, NULL); // Start death animation in 500ms
   }
 }
@@ -407,12 +358,16 @@ void root_layer_update(Layer *me, GContext *ctx) {
 //  Main Functions
 // ------------------------------------------------------------------------ //
 static void main_window_load(Window *window) {
+  //Game is displayed on window's root layer, meaning no erase
   root_layer = window_get_root_layer(window);
   layer_set_update_proc(root_layer, root_layer_update);
   
+  // message layer is what shows "LIVES x 3" and "GAME OVER"
   message_layer = layer_create(layer_get_frame(root_layer));
   layer_add_child(root_layer, message_layer);
   layer_set_update_proc(message_layer, message_layer_update);
+  
+  //focus
 }
 
 static void init(void) {
@@ -425,17 +380,19 @@ static void init(void) {
   
   srand(time(NULL));  // Seed randomizer
   load_images();
+  window_stack_push(main_window, true); // Display window
+
+  app_focus_service_subscribe(focus_handler);
+  
+  // init game
   coins = 0;
   score = 0;
   lives = 3;
-
-  window_stack_push(main_window, true); // Display window
-  //timer_callback(NULL);
-  init_game(NULL);
-  //looptimer=app_timer_register(UPDATE_MS, timer_callback, NULL); // Schedule a callback
+  init_round(NULL);
 }
   
 static void deinit(void) {
+  app_focus_service_unsubscribe();
   destroy_images();
   window_destroy(main_window);
 }
