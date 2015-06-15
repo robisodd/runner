@@ -115,7 +115,7 @@ static void init_round(void *data) {
   runner_y = 150;//31;//168-31;
   countdown=400*8+7; // +7 so it stays on 400 for a full second
   yvel=0;
-  jumpmode=0; // 0=on ground, button let go, ready to jump, 1=jumping button held, 2=falling button let go
+  jumpmode=0; // 0=on ground & button let go (i.e. ready to jump), 1=jumping & button held, 2=falling & button let go
   runmode=0; // 0=running, 1=stopped (TODO: Mix with JUMPMODE and ALIVE to make PlayerState)
   alive=true;
   coinanimation=0;
@@ -180,8 +180,8 @@ static void main_loop(void *data) {
     }
   } else {
     score+=3; // points for just running
-    //runner_x+=1; if(runner_x>30+48) runner_x=30+48; // catching back up
-    runner_x+=1; if(runner_x>50+48) runner_x=50+48; // catching back up
+    runner_x+=1; if(runner_x>30+48) runner_x=30+48; // catching back up
+    //runner_x+=1; if(runner_x>50+48) runner_x=50+48; // catching back up
   }
 
   // Move Player Vertically
@@ -351,7 +351,7 @@ void root_layer_update(Layer *me, GContext *ctx) {
 
   graphics_context_set_text_color(ctx, GColorBlack);
   snprintf(text, sizeof(text), "xy=(%d, %d) %d\n%d %d\n%d %d", runner_x, runner_y, yvel, occupied1, occupied2, Q1, Q2);
-  graphics_draw_text(ctx, text, fonts_get_system_font("RESOURCE_ID_GOTHIC_14"), GRect(0, 18, 144, 60), GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+  //graphics_draw_text(ctx, text, fonts_get_system_font("RESOURCE_ID_GOTHIC_14"), GRect(0, 18, 144, 60), GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 }
 
 // ------------------------------------------------------------------------ //
@@ -403,17 +403,21 @@ int main(void) {
   deinit();
 }
 /*
-Disappearing Blocks
-Falling Blocks
-Stars
-Fireballs
-Enemies
-Pipes do nothing (except plants)
-Staircase
-Pits
-Waaay later: Underground level with easy ceiling but some holes and lifts
+Future Ideas:
+  Disappearing Blocks (like megaman)
+  Falling Blocks (like Mario 3's "donut blocks")
+  Stars (temporary invincibility)
+  Fireballs (shooting)
+  Enemies
+  Pipes do nothing (except plants)
+  Staircase
+  Pits
+  Waaay later: Underground level with easy ceiling but some holes and lifts, like level 1-2
 
-
+================================================================================
+This is the layout of the whole world.
+  - means not visible (out of screen bounds, but still exists)
+  o means a tile on the screen
 (Offset>>4 + x)&15 + y*16 = block on screen
 F----------------
 E----------------
@@ -432,4 +436,5 @@ A----------------
 1---oooooooooo---
 0---oooooooooo---
  0123456789ABCDEF
+ ================================================================================
 */
